@@ -1,0 +1,14 @@
+Name:                Asteroids
+Version:             0.0
+Description:         Backend for online Asteroids game
+License:             GPL-3
+Author:              adam@michalik.es
+Maintainer:          adam@michalik.es
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+
+Executable Asteroids
+  Main-is:           Asteroids.hs
+  Build-Depends:     base, containers, mtl, transformers, ghc-prim,
+                     lens, aeson, text, attoparsec, websockets >= 0.7,
+                     bytestring >= 0.10.2.0, network, stm
