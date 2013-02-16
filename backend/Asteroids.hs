@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 import Control.Monad
+import Control.Applicative
 import Control.Monad.Trans
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -11,13 +12,24 @@ import Network.WebSockets
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
 
-data ServerEvent = ServerEvent
-data ClientEvent = ClientConnected String (TChan ServerEvent)
+data ClientEvent = ClientConnected String (TChan WireMessageFromServer)
 data WireMessageFromClient = Hello { _nick :: String }
 
+
 instance FromJSON WireMessageFromClient where
-  parseJSON (Object v) = undefined
+  parseJSON (Object v) = do
+    msgType :: String <- v .: "msgType"
+    args <- v .: "args"
+    case msgType of
+      "hello" -> Hello <$> args .: "nick"
+      _ -> mzero
   parseJSON _ = mzero
+
+data WireMessageFromServer = Hi
+
+instance ToJSON WireMessageFromServer where
+  toJSON Hi = object ["msgType" .= ("hi" :: BS.ByteString), "args" .= object []]
+
 
 newClient :: Int -> TChan ClientEvent -> Request -> WebSockets Hybi10 ()
 newClient id chan rq = do
@@ -45,7 +57,16 @@ clientNetworkLoop networkChan = do
     Just wireMessage -> liftIO . atomically $ writeTChan networkChan wireMessage
   clientNetworkLoop networkChan
 
-clientLoop = undefined
+clientLoop :: TChan WireMessageFromServer -> TChan ClientEvent ->
+              TChan WireMessageFromClient -> Sink Hybi10 -> String -> IO ()
+clientLoop fromServerChan toServerChan fromNetworkChan toNetworkSink nick = do
+  msg <- atomically getMessage
+  case msg of
+    Left _ -> undefined
+    Right _ -> undefined
+  clientLoop fromServerChan toServerChan fromNetworkChan toNetworkSink nick
+  where getMessage = (Left <$> readTChan fromServerChan)
+                     `orElse` (Right <$> readTChan fromNetworkChan)
 
 acceptLoop :: [Int] -> Socket -> TChan ClientEvent -> IO ()
 acceptLoop (id:ids) serverSock chan = do
