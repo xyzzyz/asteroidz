@@ -79,6 +79,15 @@ Projectile.prototype.draw = function(ctx) {
 var game;
 var ws;
 
+function sendMessage(msgType, args) {
+    ws.send(JSON.stringify(
+                {
+                msgType: msgType,
+                args: args
+                }
+            ));
+}
+
 $(document).ready(
     function() {
         game = new Game();
@@ -88,7 +97,7 @@ $(document).ready(
         ws.onopen = function(){
             /*Send a small message to the console once the connection is established */
             console.log('Connection open!');
-            ws.send("asd");
+            sendMessage("hello", {nick:"foobar"});
         };
 
         $("body").keypress(
