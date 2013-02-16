@@ -13,11 +13,11 @@ Game.prototype.translateTo = function(sprite) {
 };
 
 Game.prototype.playerThrust = function(x) {
-    
+
 };
 
 Game.prototype.update = function() {
-    this.updatePlayerPosition();
+
 };
 
 Game.prototype.redraw = function() {
@@ -77,11 +77,19 @@ Projectile.prototype.draw = function(ctx) {
 };
 
 var game;
+var ws;
 
 $(document).ready(
     function() {
         game = new Game();
         game.redraw();
+
+        ws = new WebSocket("ws://localhost:9160");
+        ws.onopen = function(){
+            /*Send a small message to the console once the connection is established */
+            console.log('Connection open!');
+            ws.send("asd");
+        };
 
         $("body").keypress(
             function(e) {
@@ -90,7 +98,7 @@ $(document).ready(
                 case 38: game.thrustUp = true; break;
                 case 39: game.thrustRight = true; break;
                 case 40: game.thrustDown = true; break;
-                default: return;
+                default: return false;
                 }
                 e.preventDefault();
                 return true;

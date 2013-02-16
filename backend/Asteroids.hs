@@ -1,23 +1,33 @@
+{-# LANGUAGE OverloadedStrings #-}
+import Control.Monad
 import Control.Monad.Trans
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Network (listenOn, PortID(PortNumber))
 import Network.Socket (accept, withSocketsDo, Socket)
 import Network.WebSockets
 
-data ServerEvent
-data ClientEvent = ClientConnected String ServerEvent
+import Data.Aeson
+import qualified Data.ByteString.Lazy as BS
+
+data ServerEvent = ServerEvent
+data ClientEvent = ClientConnected String (TChan ServerEvent)
 data WireMessageFromClient = Hello { _nick :: String }
 
-newClient :: TChan ClientEvent -> Request -> WebSockets Hybi10 ()
+instance FromJSON WireMessageFromClient where
+  parseJSON (Object v) = undefined
+  parseJSON _ = mzero
+
+newClient :: Int -> TChan ClientEvent -> Request -> WebSockets Hybi10 ()
 newClient id chan rq = do
   liftIO $ putStrLn "Ktos przylazl"
   acceptRequest rq
-  msg <- (receiveData :: WebSockets Hybi10 String)
-  case wireMessageFromString msg of
-    Ok (Hello nick) -> handleHelloMessage nick
-    Error str -> liftIO $ putStrLn ("JSON error: " ++ str)
-    _ -> liftIO $ putStrLn ("Unexpected message")
+  msg <- (receiveData :: WebSockets Hybi10 BS.ByteString)
+  liftIO $ BS.putStrLn msg
+  case decode msg :: Maybe WireMessageFromClient of
+    Nothing -> liftIO . putStrLn $ "malformed message"
+    Just (Hello nick) -> handleHelloMessage nick
   return ()
   where handleHelloMessage nick = do
           clientChan <- liftIO . atomically $ newTChan
@@ -29,13 +39,15 @@ newClient id chan rq = do
           clientNetworkLoop networkChan
 
 clientNetworkLoop networkChan = do
-  msg <- (receiveData :: WebSockets Hybi10 String)
-  case wireMessageFromString msg of
-    Ok wireMessage -> liftIO . atomically $ writeTChan networkChan wireMessage
-    Error str -> liftIO . putStrLn $ "JSON error: " ++ str
+  msg <- (receiveData :: WebSockets Hybi10 BS.ByteString)
+  case decode msg :: Maybe WireMessageFromClient of
+    Nothing -> liftIO . putStrLn $ "malformed message"
+    Just wireMessage -> liftIO . atomically $ writeTChan networkChan wireMessage
   clientNetworkLoop networkChan
 
-acceptLoop :: Socket -> TChan ClientMessage -> IO ()
+clientLoop = undefined
+
+acceptLoop :: [Int] -> Socket -> TChan ClientEvent -> IO ()
 acceptLoop (id:ids) serverSock chan = do
   (clientSock, sockAddr) <- accept serverSock
   forkIO $ runWithSocket clientSock (newClient id chan)
@@ -44,5 +56,6 @@ acceptLoop (id:ids) serverSock chan = do
 main :: IO ()
 main = withSocketsDo $ do
   putStrLn "Hello, world!"
+  chan <- atomically newTChan
   servSock <- listenOn $ PortNumber 9160
-  forkIO $ acceptLoop [0..] servSock chan
+  acceptLoop [0..] servSock chan
